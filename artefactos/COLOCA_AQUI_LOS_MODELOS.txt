@@ -1,0 +1,6 @@
+Ejecuta exportar_modelos_notebook.py desde tu Notebook y copia en esta carpeta:
+
+- modelos.joblib
+- metadata.joblib
+
+La aplicación no puede realizar predicciones hasta que estén presentes.
