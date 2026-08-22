@@ -424,10 +424,11 @@ with st.form("formulario_alumno"):
         st.markdown("""
     | Variable | Descripción | Significado de los valores |
     |---|---|---|
-    | **famsize** | Tamaño de la familia del alumno. | `0`: más de 3 miembros · `1`: 3 miembros o menos |
-    | **Pstatus** | Situación de convivencia de los padres. | `0`: separados · `1`: viven juntos |
-    | **educacion_familiar** | Nivel educativo familiar. | `0`: sin estudios · `1`: educación primaria · `2`: educación básica · `3`: educación secundaria · `4`: estudios superiores |
-    | **apoyo_familiar** | Nivel de apoyo educativo recibido por parte de la familia. | `0`: bajo · `1`: medio · `2`: alto |
+    | **famsize** | Tamaño de la familia del alumno. | `0`: 3 miembros o menos · `1`: más de 3 miembros |
+    | **Pstatus** | Situación de convivencia de los padres. | `0`: juntos · `1`: separados |
+    | **educacion_familiar** | Nivel educativo familiar. | Escala de `0` — muy poco a `4` — mucho |
+    | **apoyo_familiar** | Nivel de apoyo educativo recibido por parte de la familia. | Escala de `0` — muy poco a `3` — mucho |
+    | **studytime** | Tiempo de estudio semanal del alumno. | Escala de `1` — muy poco a `4` — mucho |
     | **failures** | Número de suspensos anteriores del alumno. | `0`: ninguno · `1`: uno · `2`: dos · `3`: tres o más |
     | **schoolsup** | Apoyo educativo adicional proporcionado por el centro. | `0`: no recibe · `1`: sí recibe |
     | **activities** | Participación en actividades extraescolares. | `0`: no participa · `1`: sí participa |
