@@ -28,7 +28,6 @@ COLORES_CLASES = {
 
 st.set_page_config(
     page_title="Estimación de riesgo académico",
-    page_icon="🎓",
     layout="wide",
 )
 
@@ -418,25 +417,182 @@ with st.form("formulario_alumno"):
     st.subheader("Datos del alumno")
     with st.expander(
         "Descripción de las variables y sus valores",
-        expanded=True
+        expanded=False
     ):
 
-        st.markdown("""
-    | Variable | Descripción | Significado de los valores |
-    |---|---|---|
-    | **famsize** | Tamaño de la familia del alumno. | `0`: 3 miembros o menos · `1`: más de 3 miembros |
-    | **Pstatus** | Situación de convivencia de los padres. | `0`: juntos · `1`: separados |
-    | **educacion_familiar** | Nivel educativo familiar. | Escala de `0` — muy poco a `4` — mucho |
-    | **apoyo_familiar** | Nivel de apoyo educativo recibido por parte de la familia. | Escala de `0` — muy poco a `3` — mucho |
-    | **studytime** | Tiempo de estudio semanal del alumno. | Escala de `1` — muy poco a `4` — mucho |
-    | **failures** | Número de suspensos anteriores del alumno. | `0`: ninguno · `1`: uno · `2`: dos · `3`: tres o más |
-    | **schoolsup** | Apoyo educativo adicional proporcionado por el centro. | `0`: no recibe · `1`: sí recibe |
-    | **activities** | Participación en actividades extraescolares. | `0`: no participa · `1`: sí participa |
-    | **higher** | Intención de cursar estudios superiores. | `0`: no · `1`: sí |
-    | **famrel** | Calidad de las relaciones familiares. | Escala de `1` — muy malas a `5` — excelentes |
-    | **freetime** | Tiempo libre disponible después de las clases. | Escala de `1` — muy poco a `5` — mucho |
-    | **goout** | Frecuencia con la que el alumno sale con amigos. | Escala de `1` — muy baja a `5` — muy alta |
-        """)
+        st.html(
+            """
+            <style>
+            .aviso-movil {
+                display: none;
+                color: #6b7280;
+                font-size: 0.85rem;
+                margin-bottom: 8px;
+            }
+
+            .tabla-variables {
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                border: 1px solid rgba(128, 128, 128, 0.25);
+                border-radius: 8px;
+            }
+
+            .tabla-variables table {
+                width: 100%;
+                min-width: 900px;
+                border-collapse: collapse;
+                margin: 0;
+            }
+
+            .tabla-variables th,
+            .tabla-variables td {
+                padding: 12px 15px;
+                border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+                border-right: 1px solid rgba(128, 128, 128, 0.20);
+                text-align: left;
+                vertical-align: top;
+            }
+
+            .tabla-variables th {
+                font-weight: 700;
+                background-color: rgba(128, 128, 128, 0.08);
+            }
+
+            .tabla-variables tr:last-child td {
+                border-bottom: none;
+            }
+
+            .tabla-variables th:last-child,
+            .tabla-variables td:last-child {
+                border-right: none;
+            }
+
+            /* Mantiene visible el nombre de la variable */
+            .tabla-variables th:first-child,
+            .tabla-variables td:first-child {
+                position: sticky;
+                left: 0;
+                z-index: 2;
+                min-width: 175px;
+                background-color: var(--background-color, white);
+                font-weight: 700;
+            }
+
+            .tabla-variables th:first-child {
+                z-index: 3;
+                background-color: #f5f5f5;
+            }
+
+            @media (max-width: 768px) {
+                .aviso-movil {
+                    display: block;
+                }
+
+                .tabla-variables table {
+                    min-width: 780px;
+                    font-size: 0.88rem;
+                }
+
+                .tabla-variables th,
+                .tabla-variables td {
+                    padding: 10px 12px;
+                }
+            }
+            </style>
+
+            <div class="aviso-movil">
+                ← Desliza horizontalmente para consultar toda la tabla →
+            </div>
+
+            <div class="tabla-variables">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Variable</th>
+                            <th>Descripción</th>
+                            <th>Significado de los valores</th>
+                        </tr>
+                    </thead>
+
+                    <tbody>
+                        <tr>
+                            <td>famsize</td>
+                            <td>Tamaño de la familia del alumno.</td>
+                            <td><code>0</code>: 3 miembros o menos · <code>1</code>: más de 3 miembros</td>
+                        </tr>
+
+                        <tr>
+                            <td>Pstatus</td>
+                            <td>Situación de convivencia de los padres.</td>
+                            <td><code>0</code>: viven juntos · <code>1</code>: separados</td>
+                        </tr>
+
+                        <tr>
+                            <td>educacion_familiar</td>
+                            <td>Nivel educativo familiar.</td>
+                            <td>Escala de <code>0</code> — muy poco a <code>4</code> — mucho</td>
+                        </tr>
+
+                        <tr>
+                            <td>apoyo_familiar</td>
+                            <td>Nivel de apoyo educativo recibido por la familia.</td>
+                            <td>Escala de <code>0</code> — muy poco a <code>3</code> — mucho</td>
+                        </tr>
+
+                        <tr>
+                            <td>studytime</td>
+                            <td>Tiempo de estudio semanal del alumno.</td>
+                            <td>Escala de <code>1</code> — muy poco a <code>4</code> — mucho</td>
+                        </tr>
+
+                        <tr>
+                            <td>failures</td>
+                            <td>Número de suspensos anteriores del alumno.</td>
+                            <td><code>0</code>: ninguno · <code>1</code>: uno · <code>2</code>: dos · <code>3</code>: tres o más</td>
+                        </tr>
+
+                        <tr>
+                            <td>schoolsup</td>
+                            <td>Apoyo educativo adicional proporcionado por el centro.</td>
+                            <td><code>0</code>: no recibe · <code>1</code>: sí recibe</td>
+                        </tr>
+
+                        <tr>
+                            <td>activities</td>
+                            <td>Participación en actividades extraescolares.</td>
+                            <td><code>0</code>: no participa · <code>1</code>: sí participa</td>
+                        </tr>
+
+                        <tr>
+                            <td>higher</td>
+                            <td>Intención de cursar estudios superiores.</td>
+                            <td><code>0</code>: no · <code>1</code>: sí</td>
+                        </tr>
+
+                        <tr>
+                            <td>famrel</td>
+                            <td>Calidad de las relaciones familiares.</td>
+                            <td>Escala de <code>1</code> — muy malas a <code>5</code> — excelentes</td>
+                        </tr>
+
+                        <tr>
+                            <td>freetime</td>
+                            <td>Tiempo libre disponible después de las clases.</td>
+                            <td>Escala de <code>1</code> — muy poco a <code>5</code> — mucho</td>
+                        </tr>
+
+                        <tr>
+                            <td>goout</td>
+                            <td>Frecuencia con la que el alumno sale con amigos.</td>
+                            <td>Escala de <code>1</code> — muy baja a <code>5</code> — muy alta</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            """
+        )
+
 
     st.caption(
         "Los valores deben introducirse conforme a estas codificaciones, "
