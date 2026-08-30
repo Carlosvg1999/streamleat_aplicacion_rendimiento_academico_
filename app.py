@@ -1,5 +1,5 @@
 from pathlib import Path
-import html
+import json
 
 import joblib
 import numpy as np
@@ -7,13 +7,17 @@ import pandas as pd
 import plotly.graph_objects as go
 import shap
 import streamlit as st
+from xgboost import XGBClassifier
 
 
 BASE_DIR = Path(__file__).resolve().parent
-RUTA_MODELOS = BASE_DIR / "artefactos" / "modelos.joblib"
+RUTA_MODELOS_LEGACY = BASE_DIR / "artefactos" / "modelos.joblib"
+RUTA_MODELOS_SKLEARN = BASE_DIR / "artefactos" / "modelos_sklearn.joblib"
+RUTA_MANIFIESTO = BASE_DIR / "artefactos" / "modelos_manifest.json"
 RUTA_METADATA = BASE_DIR / "artefactos" / "metadata.joblib"
 
 CLASES_ESPERADAS = [0, 1, 2]
+NUMERO_MODELOS_ESPERADO = 10
 NOMBRES_CLASES_DEFECTO = {
     0: "Mucho riesgo",
     1: "Riesgo",
@@ -25,9 +29,129 @@ COLORES_CLASES = {
     2: "#2E8B57",
 }
 
+# Textos mostrados al usuario. Las claves numéricas siguen siendo exactamente
+# las que reciben los modelos; únicamente cambia su representación visual.
+INFORMACION_VARIABLES_DEFECTO = {
+    "famsize": {
+        "etiqueta": "Tamaño familiar",
+        "descripcion": "Número de personas que componen la unidad familiar.",
+        "opciones_texto": {
+            0: "0 — 3 miembros o menos",
+            1: "1 — Más de 3 miembros",
+        },
+    },
+    "Pstatus": {
+        "etiqueta": "Convivencia de los padres",
+        "descripcion": "Situación de convivencia de los padres del alumno.",
+        "opciones_texto": {
+            0: "0 — Viven juntos",
+            1: "1 — Viven separados",
+        },
+    },
+    "educacion_familiar": {
+        "etiqueta": "Nivel educativo familiar",
+        "descripcion": "Nivel educativo representativo del entorno familiar.",
+        "opciones_texto": {
+            0: "0 — Sin estudios",
+            1: "1 — Educación básica",
+            2: "2 — Educación media",
+            3: "3 — Educación alta",
+            4: "4 — Estudios superiores universitarios",
+        },
+    },
+    "apoyo_familiar": {
+        "etiqueta": "Apoyo familiar",
+        "descripcion": "Nivel de apoyo educativo recibido en el entorno familiar.",
+        "opciones_texto": {
+            0: "0 — Muy bajo",
+            1: "1 — Bajo",
+            2: "2 — Medio",
+            3: "3 — Alto",
+        },
+    },
+    "studytime": {
+        "etiqueta": "Tiempo de estudio semanal",
+        "descripcion": "Horas aproximadas que el alumno dedica a estudiar cada semana.",
+        "opciones_texto": {
+            1: "1 — Menos de 2 horas",
+            2: "2 — Entre 2 y 5 horas",
+            3: "3 — Entre 5 y 10 horas",
+            4: "4 — Más de 10 horas",
+        },
+    },
+    "failures": {
+        "etiqueta": "Suspensos anteriores",
+        "descripcion": "Número de asignaturas o cursos suspendidos anteriormente.",
+        "opciones_texto": {
+            0: "0 — Ninguno",
+            1: "1 — Uno",
+            2: "2 — Dos",
+            3: "3 — Tres o más",
+        },
+    },
+    "schoolsup": {
+        "etiqueta": "Apoyo educativo del centro",
+        "descripcion": "Indica si recibe apoyo educativo adicional del centro.",
+        "opciones_texto": {
+            0: "0 — No recibe",
+            1: "1 — Sí recibe",
+        },
+    },
+    "activities": {
+        "etiqueta": "Actividades extraescolares",
+        "descripcion": "Indica si participa habitualmente en actividades extraescolares.",
+        "opciones_texto": {
+            0: "0 — No participa",
+            1: "1 — Sí participa",
+        },
+    },
+    "higher": {
+        "etiqueta": "Intención de cursar estudios superiores",
+        "descripcion": "Indica si desea continuar con estudios superiores.",
+        "opciones_texto": {
+            0: "0 — No",
+            1: "1 — Sí",
+        },
+    },
+    "famrel": {
+        "etiqueta": "Calidad de las relaciones familiares",
+        "descripcion": "Valoración de la relación del alumno con su familia.",
+        "opciones_texto": {
+            1: "1 — Muy mala",
+            2: "2 — Mala",
+            3: "3 — Normal",
+            4: "4 — Buena",
+            5: "5 — Excelente",
+        },
+    },
+    "freetime": {
+        "etiqueta": "Tiempo libre después de clase",
+        "descripcion": "Cantidad de tiempo libre disponible después de las clases.",
+        "opciones_texto": {
+            1: "1 — Muy poco",
+            2: "2 — Poco",
+            3: "3 — Moderado",
+            4: "4 — Bastante",
+            5: "5 — Mucho",
+        },
+    },
+    "goout": {
+        "etiqueta": "Frecuencia de salidas con amigos",
+        "descripcion": "Frecuencia con la que el alumno sale con sus amistades.",
+        "opciones_texto": {
+            1: "1 — Muy baja",
+            2: "2 — Baja",
+            3: "3 — Moderada",
+            4: "4 — Alta",
+            5: "5 — Muy alta",
+        },
+    },
+}
+
 
 st.set_page_config(
     page_title="Estimación de riesgo académico",
+    page_icon="🎓",
     layout="wide",
 )
 
@@ -42,12 +166,9 @@ st.markdown(
         border-radius: 12px;
         padding: 14px 16px;
     }
-    .explicacion {
-        border-left: 4px solid #5b6cff;
-        background: #f7f8ff;
-        border-radius: 6px;
-        padding: 10px 14px;
-        margin: 8px 0;
+    .modelo-titulo {
+        min-height: 3.2rem;
+        margin-bottom: -0.8rem;
     }
     </style>
     """,
@@ -57,18 +178,61 @@ st.markdown(
 
 @st.cache_resource
 def cargar_recursos():
-    if not RUTA_MODELOS.exists() or not RUTA_METADATA.exists():
+    if not RUTA_METADATA.exists():
         return None, None
 
-    modelos = joblib.load(RUTA_MODELOS)
     metadata = joblib.load(RUTA_METADATA)
-    return modelos, metadata
+
+    # Formato portable: las regresiones se cargan mediante joblib y los modelos
+    # XGBoost mediante el formato UBJSON estable de la propia biblioteca.
+    if RUTA_MANIFIESTO.exists() or RUTA_MODELOS_SKLEARN.exists():
+        if not RUTA_MANIFIESTO.exists() or not RUTA_MODELOS_SKLEARN.exists():
+            raise FileNotFoundError(
+                "La exportación está incompleta: deben existir tanto "
+                "modelos_manifest.json como modelos_sklearn.joblib."
+            )
+
+        modelos_sklearn = joblib.load(RUTA_MODELOS_SKLEARN)
+        with RUTA_MANIFIESTO.open(encoding="utf-8") as archivo:
+            manifiesto = json.load(archivo)
+
+        modelos = {}
+        for entrada in manifiesto:
+            nombre = str(entrada["nombre"])
+            tipo = entrada["tipo"]
+
+            if tipo == "sklearn":
+                clave = entrada.get("clave", nombre)
+                modelos[nombre] = modelos_sklearn[clave]
+            elif tipo == "xgboost":
+                ruta_modelo = BASE_DIR / "artefactos" / entrada["archivo"]
+                if not ruta_modelo.exists():
+                    raise FileNotFoundError(
+                        f"No se encuentra el modelo XGBoost: {ruta_modelo.name}"
+                    )
+                modelo = XGBClassifier()
+                modelo.load_model(ruta_modelo)
+                modelos[nombre] = modelo
+            else:
+                raise ValueError(
+                    f"Tipo de modelo no reconocido en el manifiesto: {tipo}"
+                )
+
+        return modelos, metadata
+
+    # Compatibilidad temporal con la exportación antigua.
+    if RUTA_MODELOS_LEGACY.exists():
+        modelos = joblib.load(RUTA_MODELOS_LEGACY)
+        return modelos, metadata
+
+    return None, None
 
 
 def validar_recursos(modelos, metadata):
-    if not isinstance(modelos, dict) or len(modelos) != 4:
+    if not isinstance(modelos, dict) or len(modelos) != NUMERO_MODELOS_ESPERADO:
         raise ValueError(
-            "modelos.joblib debe contener un diccionario con exactamente cuatro modelos."
+            "La exportación debe proporcionar exactamente "
+            f"{NUMERO_MODELOS_ESPERADO} modelos."
         )
 
     modelos_invalidos = [
@@ -110,9 +274,36 @@ def nombres_clases_desde_metadata(metadata):
     }
 
 
+def informacion_variable(variable, metadata):
+    informacion = INFORMACION_VARIABLES_DEFECTO.get(variable, {}).copy()
+    informacion.update(
+        metadata.get("informacion_variables", {}).get(variable, {})
+    )
+    return informacion
+
+
 def descripcion_variable(variable, metadata):
+    informacion = informacion_variable(variable, metadata)
+    if informacion.get("etiqueta"):
+        return str(informacion["etiqueta"])
+
     descripciones = metadata.get("descripciones_variables", {})
     return str(descripciones.get(variable, variable))
+
+
+def descripcion_valor(variable, valor, metadata):
+    """Devuelve una representación comprensible del valor si existe en metadata."""
+    informacion = informacion_variable(variable, metadata)
+    opciones_texto = informacion.get("opciones_texto", {})
+
+    if valor in opciones_texto:
+        return str(opciones_texto[valor])
+    if str(valor) in opciones_texto:
+        return str(opciones_texto[str(valor)])
+
+    if isinstance(valor, (float, np.floating)):
+        return f"{float(valor):g}"
+    return str(valor)
 
 
 def valor_inicial(serie):
@@ -125,8 +316,12 @@ def valor_inicial(serie):
 
 def crear_widget_variable(variable, serie, metadata):
     """Crea un control a partir de los valores observados en los datos de referencia."""
+    informacion = informacion_variable(variable, metadata)
     etiqueta = descripcion_variable(variable, metadata)
-    ayuda = f"Variable original: {variable}" if etiqueta != variable else None
+    descripcion = informacion.get("descripcion")
+    ayuda = descripcion or (
+        f"Variable original: {variable}" if etiqueta != variable else None
+    )
     sin_nulos = serie.dropna()
     valores_unicos = list(pd.unique(sin_nulos))
 
@@ -139,20 +334,38 @@ def crear_widget_variable(variable, serie, metadata):
 
         inicial = valor_inicial(serie)
         indice = opciones.index(inicial) if inicial in opciones else 0
-        return st.selectbox(etiqueta, opciones, index=indice, help=ayuda)
+        valor = st.selectbox(
+            etiqueta,
+            opciones,
+            index=indice,
+            format_func=lambda opcion: descripcion_valor(
+                variable,
+                opcion,
+                metadata,
+            ),
+            help=ayuda,
+            key=f"entrada_{variable}",
+        )
+        if descripcion:
+            st.caption(descripcion)
+        return valor
 
     if pd.api.types.is_integer_dtype(serie.dtype):
         minimo = int(sin_nulos.min())
         maximo = int(sin_nulos.max())
         inicial = int(round(float(sin_nulos.median())))
-        return st.number_input(
+        valor = st.number_input(
             etiqueta,
             min_value=minimo,
             max_value=maximo,
             value=inicial,
             step=1,
             help=ayuda,
+            key=f"entrada_{variable}",
         )
+        if descripcion:
+            st.caption(descripcion)
+        return valor
 
     if pd.api.types.is_numeric_dtype(serie.dtype):
         minimo = float(sin_nulos.min())
@@ -160,7 +373,7 @@ def crear_widget_variable(variable, serie, metadata):
         inicial = float(sin_nulos.median())
         amplitud = maximo - minimo
         paso = max(amplitud / 100.0, 0.01)
-        return st.number_input(
+        valor = st.number_input(
             etiqueta,
             min_value=minimo,
             max_value=maximo,
@@ -168,10 +381,22 @@ def crear_widget_variable(variable, serie, metadata):
             step=paso,
             help=ayuda,
             format="%.4f",
+            key=f"entrada_{variable}",
         )
+        if descripcion:
+            st.caption(descripcion)
+        return valor
 
     opciones = sorted(str(valor) for valor in valores_unicos)
-    return st.selectbox(etiqueta, opciones, help=ayuda)
+    valor = st.selectbox(
+        etiqueta,
+        opciones,
+        help=ayuda,
+        key=f"entrada_{variable}",
+    )
+    if descripcion:
+        st.caption(descripcion)
+    return valor
 
 
 def construir_registro(X_referencia, metadata):
@@ -221,7 +446,7 @@ def ordenar_probabilidades(modelo, probabilidades):
     return salida
 
 
-def grafica_probabilidades(nombre_modelo, probabilidades, nombres_clases):
+def grafica_probabilidades(probabilidades, nombres_clases):
     etiquetas = [
         f"Clase {clase}<br>{nombres_clases[clase]}" for clase in CLASES_ESPERADAS
     ]
@@ -233,18 +458,17 @@ def grafica_probabilidades(nombre_modelo, probabilidades, nombres_clases):
             text=[f"{valor:.1%}" for valor in probabilidades],
             textposition="outside",
             cliponaxis=False,
-            hovertemplate="%{x}<br>Probabilidad estimada: %{y:.2%}<extra></extra>",
+            hovertemplate="%{x}<br>Grado de pertenencia: %{y:.2%}<extra></extra>",
         )
     )
     figura.update_layout(
-        title=nombre_modelo,
-        height=390,
-        margin=dict(l=30, r=20, t=65, b=35),
+        height=340,
+        margin=dict(l=20, r=15, t=25, b=25),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         showlegend=False,
         yaxis=dict(
-            title="Probabilidad estimada",
+            title="Grado de pertenencia",
             tickformat=".0%",
             range=[0, 1.10],
             gridcolor="#e7e9ed",
@@ -288,7 +512,10 @@ def normalizar_valores_shap(explicacion, numero_variables):
 
 
 @st.cache_resource(show_spinner=False)
-def crear_explicador(_modelo, _X_referencia):
+def crear_explicador(clave_modelo, _modelo, _X_referencia):
+    # clave_modelo forma parte de la caché y evita reutilizar un explicador
+    # perteneciente a otro modelo. Los parámetros con _ se excluyen del hash.
+    del clave_modelo
     nombre_clase = _modelo.__class__.__name__.lower()
     referencia = shap.sample(
         _X_referencia,
@@ -312,10 +539,16 @@ def crear_explicador(_modelo, _X_referencia):
     return shap.Explainer(_modelo.predict_proba, referencia), "generico"
 
 
-def calcular_explicacion_local(modelo, X_referencia, registro, clase_predicha):
+def calcular_explicacion_local(
+    nombre_modelo,
+    modelo,
+    X_referencia,
+    registro,
+    clase_predicha,
+):
     X_modelo_ref = preparar_registro_para_modelo(modelo, X_referencia)
     X_modelo_registro = preparar_registro_para_modelo(modelo, registro)
-    explicador, tipo = crear_explicador(modelo, X_modelo_ref)
+    explicador, tipo = crear_explicador(nombre_modelo, modelo, X_modelo_ref)
 
     if tipo == "generico":
         explicacion = explicador(
@@ -349,58 +582,96 @@ def calcular_explicacion_local(modelo, X_referencia, registro, clase_predicha):
                 "variable": variable,
                 "valor": valor,
                 "shap": contribucion,
-                "direccion": "favorece" if contribucion > 0 else "reduce",
             }
         )
     return explicaciones
 
 
-def mostrar_explicaciones(explicaciones, clase_predicha, nombres_clases, metadata):
-    for posicion, elemento in enumerate(explicaciones, start=1):
-        variable = descripcion_variable(elemento["variable"], metadata)
-        valor = elemento["valor"]
-        contribucion = elemento["shap"]
-        if contribucion > 0:
-            icono = "↑"
-            texto = f"favorece la estimación de {nombres_clases[clase_predicha]}"
-            color = "#237a4b"
-        elif contribucion < 0:
-            icono = "↓"
-            texto = f"reduce la estimación de {nombres_clases[clase_predicha]}"
-            color = "#b33b4b"
-        else:
-            icono = "→"
-            texto = "tiene un efecto prácticamente neutro"
-            color = "#666666"
+def unir_enumeracion(elementos):
+    if not elementos:
+        return ""
+    if len(elementos) == 1:
+        return elementos[0]
+    return ", ".join(elementos[:-1]) + " y " + elementos[-1]
 
-        st.markdown(
-            f"""
-            <div class="explicacion">
-              <b>{posicion}. {html.escape(str(variable))}</b> = {html.escape(str(valor))}<br>
-              <span style="color:{color}">{icono} {texto}</span>
-              <span style="color:#6b7280"> · SHAP {contribucion:+.4f}</span>
-            </div>
-            """,
-            unsafe_allow_html=True,
+
+def generar_explicacion_natural(
+    explicaciones,
+    clase_predicha,
+    probabilidad,
+    nombres_clases,
+    metadata,
+):
+    """Genera una explicación local legible sin atribuir causalidad a SHAP."""
+    favorables = []
+    contrarias = []
+    neutras = []
+
+    for elemento in explicaciones:
+        variable_original = elemento["variable"]
+        variable = descripcion_variable(variable_original, metadata)
+        valor = descripcion_valor(variable_original, elemento["valor"], metadata)
+        texto_variable = f"**{variable}** (valor: {valor})"
+        contribucion = elemento["shap"]
+
+        if contribucion > 1e-9:
+            favorables.append(texto_variable)
+        elif contribucion < -1e-9:
+            contrarias.append(texto_variable)
+        else:
+            neutras.append(texto_variable)
+
+    partes = [
+        f"El modelo asigna principalmente al alumno a **{nombres_clases[clase_predicha]}** "
+        f"con un grado de pertenencia del **{probabilidad:.1%}**."
+    ]
+
+    if favorables:
+        partes.append(
+            f"{unir_enumeracion(favorables)} "
+            + ("es la variable que más impulsa" if len(favorables) == 1 else "son las variables que más impulsan")
+            + " la predicción hacia esta clase."
+        )
+    if contrarias:
+        partes.append(
+            f"En cambio, {unir_enumeracion(contrarias)} "
+            + ("actúa" if len(contrarias) == 1 else "actúan")
+            + " en sentido contrario y reduce su puntuación."
+        )
+    if neutras:
+        partes.append(
+            f"{unir_enumeracion(neutras)} presenta una contribución prácticamente neutra."
         )
 
+    return " ".join(partes)
 
-st.title("Estimación de riesgo académico")
+
+st.title("🎓 Estimación de riesgo académico")
 st.caption(
-    "Introduce los datos del alumno para comparar las probabilidades de cuatro modelos "
+    "Introduce los datos del alumno para comparar las probabilidades de diez modelos "
     "y consultar una explicación local de sus predicciones."
 )
 
-modelos, metadata = cargar_recursos()
+try:
+    modelos, metadata = cargar_recursos()
+except Exception as error:
+    st.error(
+        "No ha sido posible cargar los modelos. Comprueba que copiaste todos los "
+        "archivos generados dentro de la carpeta artefactos."
+    )
+    st.code(str(error), language="text")
+    st.stop()
 
 if modelos is None or metadata is None:
     st.error(
-        "No se encuentran los archivos de modelos. Ejecuta primero el bloque de "
-        "exportación incluido en README.md y coloca los dos .joblib en la carpeta "
-        "artefactos."
+        "No se encuentran los archivos exportados. Descomprime artefactos.zip y "
+        "copia todos sus archivos dentro de la carpeta artefactos del proyecto."
     )
     st.code(
-        "artefactos/modelos.joblib\nartefactos/metadata.joblib",
+        "artefactos/modelos_sklearn.joblib\n"
+        "artefactos/modelos_manifest.json\n"
+        "artefactos/xgboost_01.ubj ... xgboost_05.ubj\n"
+        "artefactos/metadata.joblib",
         language="text",
     )
     st.stop()
@@ -415,188 +686,9 @@ nombres_clases = nombres_clases_desde_metadata(metadata)
 
 with st.form("formulario_alumno"):
     st.subheader("Datos del alumno")
-    with st.expander(
-        "Descripción de las variables y sus valores",
-        expanded=False
-    ):
-
-        st.html(
-            """
-            <style>
-            .aviso-movil {
-                display: none;
-                color: #6b7280;
-                font-size: 0.85rem;
-                margin-bottom: 8px;
-            }
-
-            .tabla-variables {
-                width: 100%;
-                overflow-x: auto;
-                -webkit-overflow-scrolling: touch;
-                border: 1px solid rgba(128, 128, 128, 0.25);
-                border-radius: 8px;
-            }
-
-            .tabla-variables table {
-                width: 100%;
-                min-width: 900px;
-                border-collapse: collapse;
-                margin: 0;
-            }
-
-            .tabla-variables th,
-            .tabla-variables td {
-                padding: 12px 15px;
-                border-bottom: 1px solid rgba(128, 128, 128, 0.25);
-                border-right: 1px solid rgba(128, 128, 128, 0.20);
-                text-align: left;
-                vertical-align: top;
-            }
-
-            .tabla-variables th {
-                font-weight: 700;
-                background-color: rgba(128, 128, 128, 0.08);
-            }
-
-            .tabla-variables tr:last-child td {
-                border-bottom: none;
-            }
-
-            .tabla-variables th:last-child,
-            .tabla-variables td:last-child {
-                border-right: none;
-            }
-
-            /* Mantiene visible el nombre de la variable */
-            .tabla-variables th:first-child,
-            .tabla-variables td:first-child {
-                position: sticky;
-                left: 0;
-                z-index: 2;
-                min-width: 175px;
-                background-color: var(--background-color, white);
-                font-weight: 700;
-            }
-
-            .tabla-variables th:first-child {
-                z-index: 3;
-                background-color: #f5f5f5;
-            }
-
-            @media (max-width: 768px) {
-                .aviso-movil {
-                    display: block;
-                }
-
-                .tabla-variables table {
-                    min-width: 780px;
-                    font-size: 0.88rem;
-                }
-
-                .tabla-variables th,
-                .tabla-variables td {
-                    padding: 10px 12px;
-                }
-            }
-            </style>
-
-            <div class="aviso-movil">
-                ← Desliza horizontalmente para consultar toda la tabla →
-            </div>
-
-            <div class="tabla-variables">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Variable</th>
-                            <th>Descripción</th>
-                            <th>Significado de los valores</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        <tr>
-                            <td>famsize</td>
-                            <td>Tamaño de la familia del alumno.</td>
-                            <td><code>0</code>: 3 miembros o menos · <code>1</code>: más de 3 miembros</td>
-                        </tr>
-
-                        <tr>
-                            <td>Pstatus</td>
-                            <td>Situación de convivencia de los padres.</td>
-                            <td><code>0</code>: viven juntos · <code>1</code>: separados</td>
-                        </tr>
-
-                        <tr>
-                            <td>educacion_familiar</td>
-                            <td>Nivel educativo familiar.</td>
-                            <td>Escala de <code>0</code> — muy poco a <code>4</code> — mucho</td>
-                        </tr>
-
-                        <tr>
-                            <td>apoyo_familiar</td>
-                            <td>Nivel de apoyo educativo recibido por la familia.</td>
-                            <td>Escala de <code>0</code> — muy poco a <code>3</code> — mucho</td>
-                        </tr>
-
-                        <tr>
-                            <td>studytime</td>
-                            <td>Tiempo de estudio semanal del alumno.</td>
-                            <td>Escala de <code>1</code> — muy poco a <code>4</code> — mucho</td>
-                        </tr>
-
-                        <tr>
-                            <td>failures</td>
-                            <td>Número de suspensos anteriores del alumno.</td>
-                            <td><code>0</code>: ninguno · <code>1</code>: uno · <code>2</code>: dos · <code>3</code>: tres o más</td>
-                        </tr>
-
-                        <tr>
-                            <td>schoolsup</td>
-                            <td>Apoyo educativo adicional proporcionado por el centro.</td>
-                            <td><code>0</code>: no recibe · <code>1</code>: sí recibe</td>
-                        </tr>
-
-                        <tr>
-                            <td>activities</td>
-                            <td>Participación en actividades extraescolares.</td>
-                            <td><code>0</code>: no participa · <code>1</code>: sí participa</td>
-                        </tr>
-
-                        <tr>
-                            <td>higher</td>
-                            <td>Intención de cursar estudios superiores.</td>
-                            <td><code>0</code>: no · <code>1</code>: sí</td>
-                        </tr>
-
-                        <tr>
-                            <td>famrel</td>
-                            <td>Calidad de las relaciones familiares.</td>
-                            <td>Escala de <code>1</code> — muy malas a <code>5</code> — excelentes</td>
-                        </tr>
-
-                        <tr>
-                            <td>freetime</td>
-                            <td>Tiempo libre disponible después de las clases.</td>
-                            <td>Escala de <code>1</code> — muy poco a <code>5</code> — mucho</td>
-                        </tr>
-
-                        <tr>
-                            <td>goout</td>
-                            <td>Frecuencia con la que el alumno sale con amigos.</td>
-                            <td>Escala de <code>1</code> — muy baja a <code>5</code> — muy alta</td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-            """
-        )
-
-
-    st.caption(
-        "Los valores deben introducirse conforme a estas codificaciones, "
-        "que son las utilizadas durante el entrenamiento de los modelos."
+    st.info(
+        "Los controles y sus límites se generan con los datos de referencia empleados "
+        "al exportar los modelos."
     )
     registro = construir_registro(X_referencia, metadata)
     enviado = st.form_submit_button(
@@ -649,64 +741,77 @@ columna_1.metric(
     f"Clase {clase_conjunta} · {nombres_clases[clase_conjunta]}",
 )
 columna_2.metric("Probabilidad media", f"{confianza_conjunta:.1%}")
-columna_3.metric("Coincidencia de modelos", f"{votos} de 4")
+columna_3.metric(
+    "Coincidencia de modelos",
+    f"{votos} de {len(resultados)}",
+)
 
 st.caption(
-    "El resultado conjunto es el promedio simple de las probabilidades de los cuatro "
+    "El resultado conjunto es el promedio simple de las probabilidades de los diez "
     "modelos. Debe interpretarse como apoyo a la decisión, no como diagnóstico ni como "
     "certeza garantizada."
 )
 
-st.subheader("Probabilidades de los cuatro modelos")
-for inicio in range(0, 4, 2):
+st.subheader("Resultados de los diez modelos")
+st.caption(
+    "Cada gráfica muestra el grado de pertenencia estimado para las tres clases. "
+    "Debajo se explican las tres variables con mayor influencia local según SHAP."
+)
+
+for inicio in range(0, len(resultados), 2):
     columnas_graficas = st.columns(2)
     for columna, resultado in zip(columnas_graficas, resultados[inicio:inicio + 2]):
         with columna:
-            st.plotly_chart(
-                grafica_probabilidades(
-                    resultado["nombre"],
-                    resultado["probabilidades"],
-                    nombres_clases,
-                ),
-                use_container_width=True,
-                key=f"grafica_{inicio}_{resultado['nombre']}",
-            )
-            clase = resultado["clase_predicha"]
-            st.write(
-                f"Predicción: **clase {clase} · {nombres_clases[clase]}** "
-                f"({resultado['probabilidades'][clase]:.1%})"
-            )
+            with st.container(border=True):
+                st.markdown(
+                    f'<div class="modelo-titulo"><h3>{resultado["nombre"]}</h3></div>',
+                    unsafe_allow_html=True,
+                )
+                st.plotly_chart(
+                    grafica_probabilidades(
+                        resultado["probabilidades"],
+                        nombres_clases,
+                    ),
+                    use_container_width=True,
+                    key=f"grafica_{inicio}_{resultado['nombre']}",
+                )
 
-st.subheader("Variables relevantes para cada predicción")
+                clase = resultado["clase_predicha"]
+                probabilidad = float(resultado["probabilidades"][clase])
+
+                try:
+                    explicaciones = calcular_explicacion_local(
+                        resultado["nombre"],
+                        resultado["modelo"],
+                        X_referencia,
+                        registro,
+                        clase,
+                    )
+                    st.markdown(
+                        generar_explicacion_natural(
+                            explicaciones,
+                            clase,
+                            probabilidad,
+                            nombres_clases,
+                            metadata,
+                        )
+                    )
+                    detalle_shap = " · ".join(
+                        f"{descripcion_variable(item['variable'], metadata)}: "
+                        f"{item['shap']:+.4f}"
+                        for item in explicaciones
+                    )
+                    st.caption(f"Contribuciones SHAP: {detalle_shap}")
+                except Exception as error:
+                    st.warning(
+                        "La predicción se calculó correctamente, pero SHAP no pudo "
+                        f"generar la explicación local: {error}"
+                    )
+
 st.caption(
-    "Se muestran las tres contribuciones SHAP de mayor magnitud para la clase predicha "
-    "por cada modelo. La dirección explica el comportamiento del modelo, no una relación causal."
+    "Las explicaciones SHAP describen el comportamiento de cada modelo para este caso. "
+    "Indican asociación con la predicción, no una relación causal con el rendimiento."
 )
-
-for resultado in resultados:
-    with st.expander(resultado["nombre"], expanded=True):
-        clase = resultado["clase_predicha"]
-        st.write(
-            f"Explicación de la predicción **clase {clase} · {nombres_clases[clase]}**"
-        )
-        try:
-            explicaciones = calcular_explicacion_local(
-                resultado["modelo"],
-                X_referencia,
-                registro,
-                clase,
-            )
-            mostrar_explicaciones(
-                explicaciones,
-                clase,
-                nombres_clases,
-                metadata,
-            )
-        except Exception as error:
-            st.warning(
-                "La predicción se calculó correctamente, pero SHAP no pudo generar "
-                f"la explicación local: {error}"
-            )
 
 with st.expander("Datos introducidos"):
     st.dataframe(registro, use_container_width=True, hide_index=True)

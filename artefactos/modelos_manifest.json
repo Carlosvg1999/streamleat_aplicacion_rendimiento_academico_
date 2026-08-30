@@ -1,0 +1,52 @@
+[
+  {
+    "nombre": "Regresión logística — Experimento 1",
+    "tipo": "sklearn",
+    "clave": "Regresión logística — Experimento 1"
+  },
+  {
+    "nombre": "XGBoost — Experimento 1",
+    "tipo": "xgboost",
+    "archivo": "xgboost_01.ubj"
+  },
+  {
+    "nombre": "Regresión logística — Experimento 2",
+    "tipo": "sklearn",
+    "clave": "Regresión logística — Experimento 2"
+  },
+  {
+    "nombre": "XGBoost — Experimento 2",
+    "tipo": "xgboost",
+    "archivo": "xgboost_02.ubj"
+  },
+  {
+    "nombre": "Regresión logística — Experimento 3",
+    "tipo": "sklearn",
+    "clave": "Regresión logística — Experimento 3"
+  },
+  {
+    "nombre": "XGBoost — Experimento 3",
+    "tipo": "xgboost",
+    "archivo": "xgboost_03.ubj"
+  },
+  {
+    "nombre": "Regresión logística — Experimento 4",
+    "tipo": "sklearn",
+    "clave": "Regresión logística — Experimento 4"
+  },
+  {
+    "nombre": "XGBoost — Experimento 4",
+    "tipo": "xgboost",
+    "archivo": "xgboost_04.ubj"
+  },
+  {
+    "nombre": "Regresión logística — Experimento 5",
+    "tipo": "sklearn",
+    "clave": "Regresión logística — Experimento 5"
+  },
+  {
+    "nombre": "XGBoost — Experimento 5",
+    "tipo": "xgboost",
+    "archivo": "xgboost_05.ubj"
+  }
+]
